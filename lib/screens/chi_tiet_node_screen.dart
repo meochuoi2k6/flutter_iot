@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'dart:async';
 import 'dart:math';
+import '../models/data_repository.dart';
 
 class ChiTietNodeScreen extends StatefulWidget {
   final String nodeId;
@@ -14,190 +17,197 @@ class ChiTietNodeScreen extends StatefulWidget {
 class _ChiTietNodeScreenState extends State<ChiTietNodeScreen> {
   List<FlSpot> diemDuLieuTemp = [];
   List<FlSpot> diemDuLieuHum = [];
-  
-  final int soLuongDiemHienThi = 10;
-  double xValue = 0;
-  Timer? _timer;
+  StreamSubscription? _subscription;
 
   @override
   void initState() {
     super.initState();
-    // Tạo dữ liệu giả ban đầu
-    for (int i = 0; i < soLuongDiemHienThi; i++) {
-      diemDuLieuTemp.add(FlSpot(xValue, 30.0));
-      diemDuLieuHum.add(FlSpot(xValue, 70.0));
-      xValue++;
-    }
-
-    _timer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
-      if (mounted) {
-        setState(() {
-          double tempRaw = 28 + Random().nextDouble() * 5; 
-          double humRaw = 60 + Random().nextDouble() * 20;
-
-          double tempMoi = double.parse(tempRaw.toStringAsFixed(1));
-          double humMoi = double.parse(humRaw.toStringAsFixed(1));
-
-          diemDuLieuTemp.add(FlSpot(xValue, tempMoi));
-          diemDuLieuHum.add(FlSpot(xValue, humMoi));
-          xValue++;
-
-          if (diemDuLieuTemp.length > soLuongDiemHienThi) {
-            diemDuLieuTemp.removeAt(0);
-            diemDuLieuHum.removeAt(0);
-          }
-        });
-      }
+    _loadHistoryFromDisk();
+    _subscription = DataRepository().nodeStream.listen((data) {
+      if (mounted) _loadHistoryFromDisk();
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _subscription?.cancel();
     super.dispose();
   }
 
-  // --- LOGIC TÍNH TOÁN ---
-  // Nhiệt độ
-  double tinhMaxTemp() => diemDuLieuTemp.isEmpty ? 0 : diemDuLieuTemp.map((e) => e.y).reduce(max);
-  double tinhMinTemp() => diemDuLieuTemp.isEmpty ? 0 : diemDuLieuTemp.map((e) => e.y).reduce(min);
-  double tinhTrungBinhTemp() {
-    if (diemDuLieuTemp.isEmpty) return 0;
-    double tong = diemDuLieuTemp.map((e) => e.y).reduce((a, b) => a + b);
-    return tong / diemDuLieuTemp.length;
+  Future<void> _loadHistoryFromDisk() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? historyJson = prefs.getString('history_${widget.nodeId}');
+
+    if (historyJson != null) {
+      try {
+        List<dynamic> listRaw = jsonDecode(historyJson);
+        setState(() {
+          diemDuLieuTemp.clear();
+          diemDuLieuHum.clear();
+          for (int i = 0; i < listRaw.length; i++) {
+            var item = listRaw[i];
+            diemDuLieuTemp.add(FlSpot(i.toDouble(), double.parse(item['temp'].toString())));
+            diemDuLieuHum.add(FlSpot(i.toDouble(), double.parse(item['hum'].toString())));
+          }
+        });
+      } catch (e) {
+        print("Lỗi parse: $e");
+      }
+    }
   }
 
-  // Độ ẩm (Đã sửa lỗi copy nhầm biến diemDuLieuTemp)
-  double tinhMaxHum() => diemDuLieuHum.isEmpty ? 0 : diemDuLieuHum.map((e) => e.y).reduce(max);
-  double tinhMinHum() => diemDuLieuHum.isEmpty ? 0 : diemDuLieuHum.map((e) => e.y).reduce(min);
-  double tinhTrungBinhHum() {
-    if (diemDuLieuHum.isEmpty) return 0;
-    double tong = diemDuLieuHum.map((e) => e.y).reduce((a, b) => a + b);
-    return tong / diemDuLieuHum.length;
-  }
+  // Logic thống kê
+  double get maxT => diemDuLieuTemp.isEmpty ? 0 : diemDuLieuTemp.map((e) => e.y).reduce(max);
+  double get minT => diemDuLieuTemp.isEmpty ? 0 : diemDuLieuTemp.map((e) => e.y).reduce(min);
+  double get avgT => diemDuLieuTemp.isEmpty ? 0 : double.parse((diemDuLieuTemp.map((e) => e.y).reduce((a, b) => a + b) / diemDuLieuTemp.length).toStringAsFixed(1));
+
+  double get maxH => diemDuLieuHum.isEmpty ? 0 : diemDuLieuHum.map((e) => e.y).reduce(max);
+  double get minH => diemDuLieuHum.isEmpty ? 0 : diemDuLieuHum.map((e) => e.y).reduce(min);
+  double get avgH => diemDuLieuHum.isEmpty ? 0 : double.parse((diemDuLieuHum.map((e) => e.y).reduce((a, b) => a + b) / diemDuLieuHum.length).toStringAsFixed(1));
 
   @override
   Widget build(BuildContext context) {
+    String curT = diemDuLieuTemp.isEmpty ? "--" : "${diemDuLieuTemp.last.y}";
+    String curH = diemDuLieuHum.isEmpty ? "--" : "${diemDuLieuHum.last.y}";
+
     return Scaffold(
       appBar: AppBar(
-        title: Text("Chi tiết: ${widget.nodeId}"),
+        title: Text(widget.nodeId, style: TextStyle(fontSize: 18)),
         backgroundColor: Colors.teal,
+        elevation: 0,
+        toolbarHeight: 40,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
         child: Column(
           children: [
-            Text("Biểu đồ (Nhiệt & Ẩm)", 
-                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 20),
+            // --- 1. THẺ THÔNG TIN (Compact) ---
+            Row(
+              children: [
+                Expanded(
+                  child: _buildCompactCard(
+                    title: "NHIỆT ĐỘ (°C)",
+                    currentVal: curT,
+                    color: Colors.red,
+                    max: maxT, min: minT, avg: avgT
+                  ),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: _buildCompactCard(
+                    title: "ĐỘ ẨM (%)",
+                    currentVal: curH,
+                    color: Colors.blue,
+                    max: maxH, min: minH, avg: avgH
+                  ),
+                ),
+              ],
+            ),
+            
+            SizedBox(height: 10),
 
-            // --- VẼ BIỂU ĐỒ ---
-            SizedBox(
-              height: 300,
-              child: LineChart(
-                LineChartData(
-                  gridData: FlGridData(show: true, drawVerticalLine: true),
-                  titlesData: FlTitlesData(
-                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 45,
-                        interval: 20,
-                        getTitlesWidget: (value, meta) {
-                          return Text(value.toStringAsFixed(1), style: TextStyle(fontSize: 11));
-                        },
+            // --- 2. BIỂU ĐỒ (Đã thêm lại đơn vị % và °C) ---
+            Expanded(
+              child: Container(
+                padding: EdgeInsets.fromLTRB(0, 10, 10, 0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.circle, size: 8, color: Colors.red), Text(" Nhiệt", style: TextStyle(fontSize: 12)),
+                        SizedBox(width: 10),
+                        Icon(Icons.circle, size: 8, color: Colors.blue), Text(" Ẩm", style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    SizedBox(height: 5),
+                    Expanded(
+                      child: LineChart(
+                        LineChartData(
+                          gridData: FlGridData(show: true, drawVerticalLine: true, getDrawingHorizontalLine: (v) => FlLine(color: Colors.grey.shade200, strokeWidth: 1)),
+                          titlesData: FlTitlesData(
+                            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30, interval: 20, getTitlesWidget: (v, m) => Text("${v.toInt()}", style: TextStyle(fontSize: 10, color: Colors.grey)))),
+                            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          ),
+                          borderData: FlBorderData(show: true, border: Border.all(color: Colors.grey.shade300)),
+                          minY: 0, maxY: 100,
+                          
+                          // --- ĐÂY LÀ PHẦN ĐÃ SỬA LẠI ---
+                          lineTouchData: LineTouchData(
+                            touchTooltipData: LineTouchTooltipData(
+                              tooltipBgColor: Colors.blueGrey.withOpacity(0.9),
+                              getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+                                return touchedBarSpots.map((barSpot) {
+                                  final val = barSpot.y;
+                                  if (barSpot.barIndex == 0) {
+                                    // Index 0 là Nhiệt độ -> Thêm °C
+                                    return LineTooltipItem("$val°C", const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
+                                  } else {
+                                    // Index 1 là Độ ẩm -> Thêm %
+                                    return LineTooltipItem("$val%", const TextStyle(color: Colors.lightBlueAccent, fontWeight: FontWeight.bold));
+                                  }
+                                }).toList();
+                              },
+                            ),
+                          ),
+                          // -------------------------------
+
+                          lineBarsData: [
+                            LineChartBarData(spots: diemDuLieuTemp, isCurved: false, color: Colors.red, barWidth: 2, dotData: FlDotData(show: false)),
+                            LineChartBarData(spots: diemDuLieuHum, isCurved: false, color: Colors.blue, barWidth: 2, dotData: FlDotData(show: false)),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  lineTouchData: LineTouchData(
-                    touchTooltipData: LineTouchTooltipData(
-                      tooltipBgColor: Colors.grey.withOpacity(0.8),
-                      getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                        return touchedBarSpots.map((barSpot) {
-                          final val = barSpot.y;
-                          if (barSpot.barIndex == 0) {
-                            return LineTooltipItem("$val°C", const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
-                          } else {
-                            return LineTooltipItem("$val%", const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold));
-                          }
-                        }).toList();
-                      },
-                    ),
-                  ),
-                  borderData: FlBorderData(show: true, border: Border.all(color: Colors.grey)),
-                  minY: 0,
-                  maxY: 100,
-                  lineBarsData: [
-                    LineChartBarData(spots: diemDuLieuTemp, isCurved: false, color: Colors.red, barWidth: 2, dotData: FlDotData(show: true)),
-                    LineChartBarData(spots: diemDuLieuHum, isCurved: false, color: Colors.blue, barWidth: 2, dotData: FlDotData(show: true)),
                   ],
                 ),
               ),
             ),
-            
-            SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.remove, color: Colors.red), Text(" Nhiệt độ  "),
-                Icon(Icons.remove, color: Colors.blue), Text(" Độ ẩm"),
-              ],
-            ),
-
-            SizedBox(height: 30),
-
-            // --- BẢNG 1: THỐNG KÊ NHIỆT ĐỘ (MÀU ĐỎ) ---
-            Text("Thống kê Nhiệt độ", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-            SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildTheThongTin("Max Temp", "${tinhMaxTemp().toStringAsFixed(1)}°C", Colors.red),
-                _buildTheThongTin("Avg Temp", "${tinhTrungBinhTemp().toStringAsFixed(1)}°C", Colors.orange),
-                _buildTheThongTin("Min Temp", "${tinhMinTemp().toStringAsFixed(1)}°C", Colors.redAccent),
-              ],
-            ),
-            
-            SizedBox(height: 20),
-
-            // --- BẢNG 2: THỐNG KÊ ĐỘ ẨM (MÀU XANH) ---
-            Text("Thống kê Độ ẩm", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-            SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                // SỬA: Đổi đơn vị thành % và màu thành Xanh
-                _buildTheThongTin("Max Hum", "${tinhMaxHum().toStringAsFixed(1)}%", Colors.blue[900]!),
-                _buildTheThongTin("Avg Hum", "${tinhTrungBinhHum().toStringAsFixed(1)}%", Colors.blue),
-                _buildTheThongTin("Min Hum", "${tinhMinHum().toStringAsFixed(1)}%", Colors.lightBlue),
-              ],
-            ),
-            SizedBox(height: 30),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTheThongTin(String label, String value, Color color) {
+  Widget _buildCompactCard({required String title, required String currentVal, required Color color, required double max, required double min, required double avg}) {
     return Container(
       padding: EdgeInsets.all(10),
-      width: 100, // Cố định độ rộng để thẳng hàng
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(
         children: [
-          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-          SizedBox(height: 5),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+          Text(currentVal, style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: color)),
+          Divider(color: color.withOpacity(0.3), height: 15),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _miniStat("Max", "$max", color),
+              _miniStat("Avg", "$avg", Colors.black54),
+              _miniStat("Min", "$min", color),
+            ],
+          )
         ],
       ),
+    );
+  }
+
+  Widget _miniStat(String label, String val, Color color) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey)),
+        Text(val, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+      ],
     );
   }
 }
