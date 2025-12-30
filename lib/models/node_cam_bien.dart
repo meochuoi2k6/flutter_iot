@@ -1,16 +1,18 @@
 class NodeCamBien {
   final String id;
-  final dynamic nhietDo; // Dùng dynamic cho an toàn
+  final dynamic nhietDo; 
   final dynamic doAm;
   final bool trangThai;
-  final DateTime thoiGianCapNhat; // <--- THÊM BIẾN NÀY
+  final DateTime thoiGianCapNhat; 
+  final int pin;
 
   NodeCamBien({
     required this.id,
     required this.nhietDo,
     required this.doAm,
     required this.trangThai,
-    required this.thoiGianCapNhat, // <--- THÊM VÀO CONSTRUCTOR
+    required this.thoiGianCapNhat, 
+    required this.pin,
   });
 
   factory NodeCamBien.fromJson(Map<String, dynamic> json) {
@@ -19,8 +21,8 @@ class NodeCamBien {
       nhietDo: json['temp'] ?? 0,
       doAm: json['hum'] ?? 0,
       trangThai: json['status'] ?? false,
-      // Khi vừa parse JSON xong là lấy giờ hiện tại luôn
-      thoiGianCapNhat: DateTime.now(), // <--- QUAN TRỌNG
+      thoiGianCapNhat: DateTime.now(), //lay thoi gian
+      pin: json['battery']
     );
   }
 }

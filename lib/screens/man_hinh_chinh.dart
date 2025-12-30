@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:async'; // Để dùng Timer
+import 'dart:async';
 import '../models/node_cam_bien.dart';
 import '../models/data_repository.dart';
 import 'chi_tiet_node_screen.dart';
@@ -17,8 +17,6 @@ class _ManHinhChinhState extends State<ManHinhChinh> {
     super.initState();
     DataRepository().khoiDong();
     
-    // --- TẠO BỘ ĐẾM THỜI GIAN ---
-    // Cứ 5 giây là bắt màn hình vẽ lại 1 lần để kiểm tra ai Offline
     _timerKiemTraOffline = Timer.periodic(Duration(seconds: 5), (timer) {
       if (mounted) setState(() {}); 
     });
@@ -26,16 +24,14 @@ class _ManHinhChinhState extends State<ManHinhChinh> {
 
   @override
   void dispose() {
-    _timerKiemTraOffline?.cancel(); // Hủy timer khi thoát
+    _timerKiemTraOffline?.cancel(); // Huy timer khi thoat
     super.dispose();
   }
 
-  // Hàm kiểm tra xem Node còn sống không?
-  // Nếu quá 10 giây không có dữ liệu mới -> Coi như chết (Offline)
   bool kiemTraOnline(NodeCamBien node) {
     final now = DateTime.now();
     final difference = now.difference(node.thoiGianCapNhat).inSeconds;
-    return difference < 10; // Còn sống nếu mới cập nhật dưới 10s
+    return difference < 10; //10s
   }
 
   @override
@@ -70,14 +66,12 @@ class _ManHinhChinhState extends State<ManHinhChinh> {
   }
 
   Widget _buildSensorCard(BuildContext context, NodeCamBien node) {
-    // --- LOGIC MỚI: TỰ ĐỘNG CHUYỂN OFFLINE ---
+
     bool isOnline = kiemTraOnline(node); 
-    
-    // Nếu Offline thì chuyển sang màu Xám/Đỏ, Online thì màu Xanh
+
     Color statusColor = isOnline ? Colors.green : Colors.grey;
     String statusText = isOnline ? "ONLINE" : "OFFLINE (Mất kết nối)";
     
-    // Nếu Offline thì làm mờ cả cái thẻ đi chút cho dễ nhận biết
     double opacity = isOnline ? 1.0 : 0.6; 
 
     return Opacity(
@@ -105,9 +99,8 @@ class _ManHinhChinhState extends State<ManHinhChinh> {
                 ),
                 TextButton(
                   onPressed: () {
-                    // Gọi hàm xóa trong Repository
                     DataRepository().xoaNode(node.id);
-                    Navigator.of(ctx).pop(); // Đóng hộp thoại
+                    Navigator.of(ctx).pop(); //dong hop thoai 
                     
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text("Đã xóa ${node.id}")),
@@ -170,7 +163,7 @@ class _ManHinhChinhState extends State<ManHinhChinh> {
               ),
               Divider(height: 1, color: Colors.grey.shade200),
               
-              // BODY CARD (Nhiệt độ - Độ ẩm)
+              // Tab Temp, Hum
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(
@@ -178,7 +171,7 @@ class _ManHinhChinhState extends State<ManHinhChinh> {
                     Expanded(
                       child: _buildInfoColumn(
                         icon: Icons.thermostat,
-                        iconColor: isOnline ? Colors.orange : Colors.grey, // Xám nếu offline
+                        iconColor: isOnline ? Colors.orange : Colors.grey,
                         label: "Nhiệt độ",
                         value: "${node.nhietDo}°C",
                         valueColor: isOnline ? Colors.orange.shade700 : Colors.grey,

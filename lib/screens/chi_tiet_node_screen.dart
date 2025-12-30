@@ -105,8 +105,7 @@ class _ChiTietNodeScreenState extends State<ChiTietNodeScreen> {
             ),
             
             SizedBox(height: 10),
-
-            // --- 2. BIỂU ĐỒ (Đã thêm lại đơn vị % và °C) ---
+          //bieu do
             Expanded(
               child: Container(
                 padding: EdgeInsets.fromLTRB(0, 10, 10, 0),
@@ -139,7 +138,6 @@ class _ChiTietNodeScreenState extends State<ChiTietNodeScreen> {
                           borderData: FlBorderData(show: true, border: Border.all(color: Colors.grey.shade300)),
                           minY: 0, maxY: 100,
                           
-                          // --- ĐÂY LÀ PHẦN ĐÃ SỬA LẠI ---
                           lineTouchData: LineTouchData(
                             touchTooltipData: LineTouchTooltipData(
                               tooltipBgColor: Colors.blueGrey.withOpacity(0.9),
@@ -147,10 +145,8 @@ class _ChiTietNodeScreenState extends State<ChiTietNodeScreen> {
                                 return touchedBarSpots.map((barSpot) {
                                   final val = barSpot.y;
                                   if (barSpot.barIndex == 0) {
-                                    // Index 0 là Nhiệt độ -> Thêm °C
                                     return LineTooltipItem("$val°C", const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
                                   } else {
-                                    // Index 1 là Độ ẩm -> Thêm %
                                     return LineTooltipItem("$val%", const TextStyle(color: Colors.lightBlueAccent, fontWeight: FontWeight.bold));
                                   }
                                 }).toList();
